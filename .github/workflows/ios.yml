@@ -15,7 +15,7 @@ jobs:
         run: |
           rm -rf lane-source
           mkdir -p lane-source
-          unzip -q Lane-iOS-real.zip -d lane-source
+          unzip -q Lane-iOS-real-fixed.zip -d lane-source
 
           echo "Project files:"
           find lane-source -maxdepth 5 -type f | sort | head -200
