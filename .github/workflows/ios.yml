@@ -1,0 +1,92 @@
+name: Lane iOS build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: xcode-27
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unpack Lane iOS project
+        run: |
+          rm -rf lane-source
+          mkdir -p lane-source
+          unzip -q Lane-iOS-real.zip -d lane-source
+
+          echo "Project files:"
+          find lane-source -maxdepth 5 -type f | sort | head -200
+
+      - name: Select Xcode 27
+        run: |
+          echo "Available Xcode installations:"
+          ls -la /Applications | grep -i Xcode || true
+
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+          echo "Selected Xcode:"
+          xcode-select -p
+          xcodebuild -version
+
+      - name: Find Xcode project
+        run: |
+          PROJECT=$(find lane-source -name "*.xcodeproj" -print -quit)
+
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: No .xcodeproj found"
+            exit 1
+          fi
+
+          echo "Found project: $PROJECT"
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+
+      - name: Show project information
+        run: |
+          xcodebuild -list -project "$PROJECT"
+
+      - name: Find scheme
+        run: |
+          SCHEME=$(xcodebuild -list -project "$PROJECT" 2>/dev/null | \
+            sed -n '/Schemes:/,/^$/p' | \
+            tail -n +2 | \
+            sed 's/^[[:space:]]*//' | \
+            grep -v '^$' | \
+            head -1)
+
+          if [ -z "$SCHEME" ]; then
+            echo "ERROR: Could not find scheme"
+            exit 1
+          fi
+
+          echo "Using scheme: $SCHEME"
+          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+
+      - name: Build unsigned archive
+        run: |
+          rm -rf build
+          mkdir -p build
+
+          xcodebuild archive \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath "$PWD/build/Lane.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Check archive
+        run: |
+          echo "Archive contents:"
+          find build/Lane.xcarchive -maxdepth 5 -type f | sort | head -200
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lane-iPhone-archive
+          path: build/Lane.xcarchive
+          if-no-files-found: error
